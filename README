@@ -1,0 +1,10 @@
+This program will split up an iCal formatted file to into smaller chunks.
+
+This is usefull if you're trying to import an iCal file into Google Calendar,
+but it's failing because your file is too big.
+
+		Usage: groovy ICalSplit.groovy [yourcalendar.ics]
+
+		This program splits an iCal file in to chunks of 1000 events each
+
+You'll need a Groovy interpreter to run this.  See: http://groovy.codehaus.org/Installing+Groovy
