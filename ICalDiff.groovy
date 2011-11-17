@@ -77,10 +77,33 @@ class ICalDiff {
 		def compareEvents = loadEvents(compareToFile)
 		def missingEvents = [] as Set
 
+		def diffSize = sourceEvents.size() - compareEvents.size()
+		if (diffSize > 0) {
+			println "Expecting at least: ${diffSize} events."
+		}
+
 		// find out what's missing
 		sourceEvents.each{ event ->
-			if ( ! compareEvents.find{ it == event } ) {
+			def matches = compareEvents.findAll{ it == event }
+			if ( ! matches ) {
 				missingEvents << event
+			} else if ( matches.size() > 1 ) {
+				println "WARNING: Found duplicate events:"
+				matches.each{ 
+					println "--------------------------------"
+					println event.uid.padLeft(40)		+ '  <=>  ' + it.uid
+					if (event.dtStart) {
+						println event.dtStart.toString().padLeft(40)	+ '  <=>  ' + it?.dtStart?.toString()
+					}
+					if (event.dtEnd) {
+						println event.dtEnd.toString().padLeft(40)	+ '  <=>  ' + it?.dtEnd?.toString()
+					}
+					if (event.dtStamp) {
+						println event.dtStamp.padLeft(40)	+ '  <=>  ' + it?.dtStamp
+					}
+					println it
+				}
+				println "================================"
 			}
 		}
 
@@ -158,6 +181,9 @@ class ICalDiff {
 		}
 
 		println "Processed ${eventCount} of ${iCalEventInstanceList.size()} records from '${inputFile}'."
+		if (eventCount != iCalEventInstanceList.size()) {
+			println "WARNING: Some events could not be loaded!"
+		}
 
 		return iCalEventInstanceList 
 	}
@@ -169,27 +195,89 @@ class ICalDiff {
 */
 class ICalEvent {
 	/** The UID setting for the Event */
-	String uid
+	String uid = ''
 	/** The DTSTART setting for the event */
-	Date dtStart
+	String dtStartString = ''
+	Date dtStart = new Date()
+	String dtStartTz = ''
+	/** The DTEND setting for the event */
+	String dtEndString = ''
+	Date dtEnd = new Date()
+	String dtEndTz = ''
 	/** The CREATED setting for the Event */
 	String created
 	/** The DTSTAMP setting for the Event */
-	String dtStamp
+	String dtStamp = ''
+	/** The RRULE setting for the Event */
+	String rRule = ''
+	/** The RDATE setting for the Event */
+	String rDate = ''
 	/** The full contents of the record as a String */
-	String record
+	String record = ''
 
 	/** parses a line from an iCal event, and places the data
 	in the appropriate attribute */
 	void parseLine(String setting) {
-		def key = setting.replaceAll(/:.*/, '')
-		def value = setting.replaceFirst(key + ':', '').trim()
-		if (key == 'UID') { uid = value }
-		else if (key == 'DTSTART') { dtStart = parseDate(value) }
-		else if (key == 'CREATED') { created = value }
-		else if (key == 'DTSTAMP') { dtStamp = parseDate(value) }
-		
-		record += setting + '\n'
+
+		def compoundKey = null
+		def subKey = null
+		def key = null
+		def value = null
+
+		def debug = false
+
+		if ( setting ==~ /^[A-Z]+[;:].*/ ) {
+			// grab everything before the :
+			key = setting.replaceAll(/:.*/, '')
+			// grab everything before the ;
+			compoundKey = key.replaceAll(/;.*/, '')
+			// grab everything after the ${key}:
+			value = setting.replaceFirst(key + ':', '').trim()
+			// grab everything before the ; in the key
+			if (compoundKey != key) {
+				// we found a compound date key
+				subKey = key.replaceFirst(compoundKey + ';', '').trim()
+			}
+
+			if (debug) { println "==================" }
+
+			if (key == 'UID') { uid = value }
+			else if (key == 'CREATED') { created = value }
+			else if (key == 'RRULE') { rRule = value }
+			else if (key == 'RDATE') { rDate = value }
+			else if (key == 'DTSTAMP') { dtStamp = parseDate(value) }
+			else if (compoundKey == 'DTSTART') {
+				if (debug) {
+					println "setting: ${setting}"
+					println "key: ${key}"
+					println "compoundKey: ${compoundKey}"
+					println "subKey: ${subKey}"
+					println "value: ${value}"
+				}
+				dtStartString = value
+				dtStart = parseDate(value)
+				dtStartTz = subKey
+			} else if (compoundKey == 'DTEND') {
+				if (debug) {
+					println "setting: ${setting}"
+					println "key: ${key}"
+					println "compoundKey: ${compoundKey}"
+					println "subKey: ${subKey}"
+					println "value: ${value}"
+				}
+				dtEndString = value
+				dtEnd = parseDate(value) 
+				dtEndTz = subKey
+			} else if (debug) {
+				println "setting: ${setting}"
+				println "key: ${key}"
+				println "compoundKey: ${compoundKey}"
+				println "subKey: ${subKey}"
+			}
+		}
+		if (setting) {
+			record += setting + '\n'
+		}
 	}
 
 	/** this is used to parse iCal formated dates */
@@ -205,6 +293,7 @@ class ICalEvent {
 		} else if ( shortDate.matcher(value).matches() ) {
 			Date.parse("yyyyMMdd", value)
 		} else {
+			println "WARNING: unknown date format: ${value}"
 			null
 		}
 	}
@@ -214,11 +303,18 @@ class ICalEvent {
 		uid.compareTo(iCalEvent.uid)
 	}
 
+
 	/** The default comparator for this class */
 	boolean equals(iCalEvent) {
 		if (iCalEvent instanceof ICalEvent) {
-			return uid.equals(iCalEvent.uid)
-		} else { return false }
+			return ( uid.equals(iCalEvent.uid) &&
+				rDate.equals(iCalEvent.rDate) &&
+				rRule.equals(iCalEvent.rRule) &&
+				dtStart.equals(iCalEvent.dtStart) &&
+				dtEnd.equals(iCalEvent.dtEnd) )
+		} else {
+			return false
+		}
 	}
 
 	/** The default toString() method for this class */
