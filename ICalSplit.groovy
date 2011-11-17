@@ -1,9 +1,24 @@
+/**
+	ICalSplit.groovy
 
+	No dependencies other than Groovy itself.
+
+	{@link https://github.com/aaronzirbes/ical-splitter}
+
+	@author	Aaron J. Zirbes	(ajz@umn.edu)
+	@version 1.0.0
+
+*/
 
 class ICalSplit {
 
+	/** This static setting determines the maximum number of events per file split */
 	static def maxEventsPerFile = 1000
 
+	/** The main method, this parses out the filename, and calls splitFile().
+
+		@param args		The single argument of the file name to split
+	 */
 	static void main(String[] args) {
 
 		if (args) {
@@ -24,6 +39,7 @@ class ICalSplit {
 		}
 	}
 
+	/** This just prints out the help message if you don't pass a file name. */
 	static void displayHelp () {
 		println """
 		Usage: groovy ICalSplit.groovy [yourcalendar.ics]
@@ -32,10 +48,22 @@ class ICalSplit {
 		"""
 	}
 
+	/** This returns a File object pointing to a particular file split chunk.
+	 
+	 	@param inputFile	The file being split
+		@param splitNumber	The number of the file split chunk
+		@return	the file object representing the file split chunk
+	 */
 	static File getSplitFile(File inputFile, splitNumber) {
 		new File(inputFile.name + '.' + splitNumber.toString().padLeft(3,'0'))
 	}
 
+	/**
+		This is the main driver for the script.
+
+		@param	inputFile	the file being processed
+		@param	eventsPerSplit	the maximum number of events to put in each file split chunk
+	*/
 	static void splitFile(File inputFile, Integer eventsPerSplit) {
 		def header = new StringBuffer()
 		def footer = 'END:VCALENDAR'
